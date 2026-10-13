@@ -1,0 +1,7 @@
+# torch installed separately (see README) for CUDA 12.8+ / Blackwell support
+transformers>=5.0   # Qwen3.5 (qwen3_5) and Muse Glimmer need 5.x
+accelerate>=0.34
+datasets>=3.0
+pyyaml>=6.0
+numpy>=1.26
+pytest>=8.0

@@ -1,0 +1,41 @@
+# Phase 2: consolidation-gated writes + deterministic recall gate
+base_model: ./Qwen3.5-4B
+dtype: bfloat16
+train_device: cuda:0          # RTX 3090 Ti
+eval_device: cuda:1           # RTX 5060 Ti
+
+memory:
+  insert_layers: [15, 23]     # right after full-attention layers
+  n_keys: 256                 # 65,536 slots per layer
+  key_dim: 256
+  topk: 32
+  heads: 4
+  value_dim: null
+  normalize_keys: true        # cosine scores -> familiarity in [-2, 2]
+
+recall_gate:
+  enabled: true
+  threshold: 0.8              # memory speaks only if familiarity > 0.8
+  temp_start: 0.5             # soft gate during training, annealed ...
+  temp_end: 0.05              # ... toward the hard step used at inference
+  margin: 0.2                 # positives pushed > 1.0, negatives < 0.6
+  hinge_weight: 1.0
+  kl_weight: 1.0              # on general text, stay identical to base
+
+write_gate:
+  enabled: true
+  confidence_threshold: 0.9   # aggregated cue confidence >= 90% -> "I've got this now"
+  cue_aggregate: median       # 3 cues -> the middle one decides (2 of 3 must pass)
+  confirm_epochs: 1           # Nori's smoothing: set 2 to require two epochs >= 90%
+  relapse_threshold: 0.75     # < 75% -> back to full relearning; 75-90% = rehearse harder
+  rehearsal_scale: 0.2        # each re-encounter rehearses, shrinking
+  min_weight: 0.01            #   as confidence -> 100%; skip once negligible
+  importance_floor: 0.5       # importance*(1+emotion) below this: never written
+
+train:
+  lr: 1.0e-3
+  batch_size: 16
+  epochs: 20
+  balance_weight: 0.1         # spread reads across slots (anti-hub)
+  write_step_scaling: true    # rehearsal strength = optimizer step size, not loss scale
+  lr_min_frac: 0.2            # slots grow less plastic over time (cosine decay to 20%)

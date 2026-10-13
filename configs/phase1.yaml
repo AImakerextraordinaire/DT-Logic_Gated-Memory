@@ -1,0 +1,26 @@
+# Phase 1: frozen base + sparse memory adapter, cross-session recall test
+# Base: Qwen3.5-4B (local clone) - multimodal wrapper, 32-layer hybrid text
+#   decoder: (linear, linear, linear, full) attention x 8, hidden 2560
+# Phase 4 target: ./Muse-Glimmer-30B (4-bit, split across both GPUs)
+base_model: ./Qwen3.5-4B
+dtype: bfloat16
+train_device: cuda:0          # RTX 3090 Ti (confirmed by env_check)
+eval_device: cuda:1           # RTX 5060 Ti (confirmed by env_check)
+
+memory:
+  # Placed right after full-attention layers (indices 3,7,...,31), where the
+  # residual stream has just integrated global context: mid and upper-mid.
+  insert_layers: [15, 23]
+  n_keys: 256                 # sub-keys per half -> 256^2 = 65,536 slots
+                              # ~168M value params/layer at hidden 2560
+                              # (~2.7GB/layer fp32 w/ Adam; ~5.4GB total)
+  key_dim: 256
+  topk: 32                    # slots activated per token per head
+  heads: 4
+  value_dim: null             # null -> match model hidden size (2560)
+
+train:
+  lr: 1.0e-3                  # memory params only; base is frozen
+  steps: 2000
+  batch_size: 8
+  seq_len: 512
